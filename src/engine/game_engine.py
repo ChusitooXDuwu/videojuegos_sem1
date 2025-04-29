@@ -32,7 +32,7 @@ class GameEngine:
         self._load_json()
         pygame.init()
         pygame.display.set_caption(self.window_title)
-        self.screen = pygame.display.set_mode((self.window_cfg["size"]["w"], self.window_cfg["size"]["h"]))
+        self.screen = pygame.display.set_mode((self.window_width, self.window_height), 0)
         self.clock = pygame.time.Clock()
         self.is_running = False
         self.framerate = self.window_fps
