@@ -15,7 +15,7 @@ def system_player_boundary(world: esper.World, screen: pygame.Surface):
     c_s: CSurface
     
     for entity, (c_t, c_s, _) in components:
-        player_rect = c_s.surf.get_rect(topleft=c_t.pos)
+        player_rect = CSurface.get_area_relative(c_s.area, c_t.pos)
         
         
         if player_rect.left < 0:

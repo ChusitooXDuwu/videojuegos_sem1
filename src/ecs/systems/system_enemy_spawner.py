@@ -3,7 +3,7 @@ import pygame
 
 
 from src.ecs.components.c_enemy_spawner import CEnemySpawner
-from src.create.prefab_creator import create_enemy
+from src.create.prefab_creator import create_enemy, create_hunter
 
 
 
@@ -22,8 +22,10 @@ def system_enemy_spawner(world: esper.World, delta_time: float, enemy_data: dict
                 enemy_type = event["enemy_type"]
                 config = enemy_data[enemy_type]
                 pos = pygame.Vector2(event["position"]["x"], event["position"]["y"])
-            
-                create_enemy(world, pos, config)
+                if enemy_type != "Hunter":
+                    create_enemy(world, pos, config)
+                else:
+                     create_hunter(world, pos, config)
                 event["creado"] = True
 
         

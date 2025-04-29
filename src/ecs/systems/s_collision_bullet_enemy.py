@@ -1,12 +1,13 @@
 import esper
 import pygame
 
+from src.create.prefab_creator import create_explosion
 from src.ecs.components.c_surface import CSurface
 from src.ecs.components.c_transform import CTransform
 from src.ecs.components.tags.c_tag_enemy import CTagEnemy
 from src.ecs.components.tags.c_tag_bullet import CTagBullet
 
-def system_collision_bullet_enemy(world: esper.World) -> None:
+def system_collision_bullet_enemy(world: esper.World, explosion_cfg:dict) -> None:
     """
     System that handles collisions between bullets and enemies
     Both the bullet and the enemy are destroyed on collision
@@ -25,20 +26,25 @@ def system_collision_bullet_enemy(world: esper.World) -> None:
         if bullet_entity in entities_to_delete:
             continue
             
-        bullet_rect = bullet_s.surf.get_rect(topleft=bullet_t.pos)
+        bullet_rect = bullet_s.area.copy()
+        bullet_rect.topleft = bullet_t.pos
         
         for enemy_entity, (enemy_s, enemy_t, _) in enemy_components:
             if enemy_entity in entities_to_delete:
                 continue
                 
-            enemy_rect = enemy_s.surf.get_rect(topleft=enemy_t.pos)
+            enemy_rect = enemy_s.area.copy()
+            enemy_rect.topleft = enemy_t.pos
             
            
             if bullet_rect.colliderect(enemy_rect):
                 entities_to_delete.add(bullet_entity)
                 entities_to_delete.add(enemy_entity)
+                create_explosion(world, enemy_t.pos, explosion_cfg)
+
                 break
     
     
     for entity in entities_to_delete:
         world.delete_entity(entity)
+        

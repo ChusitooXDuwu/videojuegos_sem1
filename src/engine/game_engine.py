@@ -1,9 +1,10 @@
+import asyncio
 import esper
 import pygame
 import json
 import math
 
-from src.create.prefab_creator import crear_cuadrado, create_enemy_spawner, create_input_player, create_player_square
+from src.create.prefab_creator import crear_cuadrado, create_bullet, create_enemy_spawner, create_input_player, create_player_square
 from src.ecs.components.c_input_command import CInputCommand, CommandPhase
 from src.ecs.components.c_velocity import CVelocity
 from src.ecs.components.c_surface import CSurface
@@ -12,9 +13,14 @@ from src.ecs.components.tags.c_tag_bullet import CTagBullet
 from src.ecs.components.tags.c_tag_player import CTagPlayer
 
 from src.ecs.systems.c_screen_bounce import system_screen_bounce
+from src.ecs.systems.s_animation import system_animation
+from src.ecs.systems.s_collision_hunter_enemy import system_collision_hunter_enemy
+from src.ecs.systems.s_explosion_animation_end import system_explosion_animation_end
+from src.ecs.systems.s_hunter_state import system_hunter_state
 from src.ecs.systems.s_player_boundary import system_player_boundary
 from src.ecs.systems.s_collision_player_enemy import system_collision_player_enemy
 from src.ecs.systems.s_collision_bullet_enemy import system_collision_bullet_enemy
+from src.ecs.systems.s_player_state import system_player_state
 from src.ecs.systems.s_screen_boundary_bullet import system_screen_boundary_bullet
 from src.ecs.systems.s_input_player import system_input_player
 from src.ecs.systems.s_movement import system_movement
@@ -26,7 +32,7 @@ class GameEngine:
         self._load_json()
         pygame.init()
         pygame.display.set_caption(self.window_title)
-        self.screen = pygame.display.set_mode((self.window_width, self.window_height), pygame.SCALED)
+        self.screen = pygame.display.set_mode((self.window_cfg["size"]["w"], self.window_cfg["size"]["h"]))
         self.clock = pygame.time.Clock()
         self.is_running = False
         self.framerate = self.window_fps
@@ -39,7 +45,7 @@ class GameEngine:
         self._player_c_s = None
         
     def _load_json(self):
-        with open("./assets/cfg/cfg_00/window.json", encoding="utf-8") as window_file:
+        with open("./assets/cfg/window.json", encoding="utf-8") as window_file:
             self.window_cfg = json.load(window_file)
             self.window_height = self.window_cfg["size"]["h"]
             self.window_width = self.window_cfg["size"]["w"]
@@ -48,16 +54,18 @@ class GameEngine:
             self.window_color_b = self.window_cfg["bg_color"]["b"]
             self.window_title = self.window_cfg["title"]
             self.window_fps = self.window_cfg["framerate"]
-        with open("./assets/cfg/cfg_00/enemies.json") as enemies_file:
+        with open("./assets/cfg/enemies.json") as enemies_file:
             self.enemies_cfg = json.load(enemies_file)
-        with open("./assets/cfg/cfg_00/level_01.json") as level_01_file:
+        with open("./assets/cfg/level_01.json") as level_01_file:
             self.level_cfg = json.load(level_01_file)   
-        with open("./assets/cfg/cfg_00/player.json") as player_file:
+        with open("./assets/cfg/player.json") as player_file:
             self.player_cfg = json.load(player_file)
-        with open("./assets/cfg/cfg_00/bullet.json") as bullet_file:
+        with open("./assets/cfg/bullet.json") as bullet_file:
             self.bullet_cfg = json.load(bullet_file)
+        with open("./assets/cfg/explosion.json") as explosion_file:
+            self.explosion_cfg = json.load(explosion_file)
 
-    def run(self) -> None:
+    async def run(self) -> None:
         self._create()
         self.is_running = True
         while self.is_running:
@@ -65,6 +73,7 @@ class GameEngine:
             self._process_events()
             self._update()
             self._draw()
+            await asyncio.sleep(0)
         self._clean()
 
     def _create(self):
@@ -104,69 +113,40 @@ class GameEngine:
         try:
             bullet_count = len(list(self.ecs_world.get_components(CTagBullet)))
             
-            if "max_bullets" not in self.level_cfg:
+            if "max_bullets" not in self.level_cfg["player_spawn"]:
                 print("Error: max_bullets not found in level config")
                 return
                 
-            if bullet_count < self.level_cfg["max_bullets"]:
+            if bullet_count < self.level_cfg["player_spawn"]["max_bullets"]:
                 
                 if self._player_c_t is None or self._player_c_s is None:
                     print("Error: Player components not found")
                     return
                     
                 
-                player_pos = self._player_c_t.pos
-                player_size = pygame.Vector2(self._player_c_s.surf.get_width(), self._player_c_s.surf.get_height())
-                
-               
-                bullet_size = pygame.Vector2(self.bullet_cfg["size"]["x"], self.bullet_cfg["size"]["y"])
-                bullet_pos_x = player_pos.x + (player_size.x / 2) - (bullet_size.x / 2)
-                bullet_pos_y = player_pos.y + (player_size.y / 2) - (bullet_size.y / 2)
-                bullet_pos = pygame.Vector2(bullet_pos_x, bullet_pos_y)
-                
-                
-                dx = mouse_pos[0] - (player_pos.x + player_size.x / 2)
-                dy = mouse_pos[1] - (player_pos.y + player_size.y / 2)
-                
-               
-                magnitude = math.sqrt(dx * dx + dy * dy)
-                if magnitude > 0:
-                    dx = dx / magnitude
-                    dy = dy / magnitude
-                
-               
-                bullet_speed = self.bullet_cfg["speed"]
-                bullet_vel = pygame.Vector2(dx * bullet_speed, dy * bullet_speed)
-                
-                
-                bullet_color = pygame.Color(
-                    self.bullet_cfg["color"]["r"],
-                    self.bullet_cfg["color"]["g"],
-                    self.bullet_cfg["color"]["b"]
-                )
-                
-               
-                bullet_entity = crear_cuadrado(
-                    self.ecs_world, 
-                    bullet_size, 
-                    bullet_pos, 
-                    bullet_vel, 
-                    bullet_color
-                )
-                
-                self.ecs_world.add_component(bullet_entity, CTagBullet())
+                create_bullet(self.ecs_world, 
+                                    mouse_pos, 
+                                    self._player_c_t.pos,
+                                    self.bullet_cfg, 
+                                    self._player_c_s.area.size)
                 print(f"Bullet created successfully. Active bullets: {bullet_count + 1}")
         except Exception as e:
             print(f"Error in _fire_bullet: {e}")
 
     def _update(self):
+        system_enemy_spawner(self.ecs_world, self.delta_time, self.enemies_cfg)
         system_movement(self.ecs_world, self.delta_time)
+        system_player_state(self.ecs_world)
+        system_hunter_state(self.ecs_world, self._player_entity, self.enemies_cfg["Hunter"])
         system_screen_bounce(self.ecs_world, self.screen)
         system_player_boundary(self.ecs_world, self.screen)
-        system_enemy_spawner(self.ecs_world, self.delta_time, self.enemies_cfg)
-        system_collision_player_enemy(self.ecs_world, self._player_entity, self.level_cfg)
-        system_collision_bullet_enemy(self.ecs_world)
         system_screen_boundary_bullet(self.ecs_world, self.screen)
+        system_collision_player_enemy(self.ecs_world, self._player_entity, self.level_cfg, self.explosion_cfg)
+        system_collision_bullet_enemy(self.ecs_world, self.explosion_cfg)
+        system_collision_hunter_enemy(self.ecs_world, self.explosion_cfg)
+        system_explosion_animation_end(self.ecs_world)
+        system_animation(self.ecs_world, self.delta_time)
+
         self.ecs_world._clear_dead_entities()
 
     def _draw(self):

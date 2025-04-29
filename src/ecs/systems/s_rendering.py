@@ -13,7 +13,7 @@ def system_rendering(world:esper.World, screen:pygame.Surface):
     c_s: CSurface
     for entity, (c_t, c_s) in components:
        
-        screen.blit(c_s.surf, c_t.pos)
+        screen.blit(c_s.surf, c_t.pos, area=c_s.area)
 
     
     
