@@ -1,5 +1,6 @@
 {
     "image": "assets/img/player.png",
+    "sound_move": "assets/snd/rocket.ogg",
     "animations": {
         "number_frames": 4,
         "list": [

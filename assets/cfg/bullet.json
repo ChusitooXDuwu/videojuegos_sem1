@@ -1,5 +1,6 @@
 {
     "sound": "assets/snd/laser.ogg",
+    "special_sound": "assets/snd/sniperShot.ogg",
     "image": "assets/img/bullet.png",
     "velocity": 200
 }

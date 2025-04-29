@@ -4,6 +4,7 @@ import pygame
 import random
 
 from src.ecs.components.c_input_command import CInputCommand
+from src.ecs.components.c_special_ability import CSpecialAbility
 from src.ecs.components.c_surface import CSurface
 from src.ecs.components.c_transform import CTransform
 from src.ecs.components.c_velocity import CVelocity
@@ -88,7 +89,75 @@ def create_player_square(ecs_world:esper.World, player_cfg:dict, level_cfg:dict)
     ecs_world.add_component(player_entity, CTagPlayer())
     ecs_world.add_component(player_entity, CAnimation(player_cfg["animations"]))
     ecs_world.add_component(player_entity, CPlayerState())
+
+    special_ability_cooldown = 5.0  # 5 seconds cooldown
+    ecs_world.add_component(player_entity, CSpecialAbility(special_ability_cooldown))
+    
     return player_entity
+
+
+def activate_special_ability(ecs_world: esper.World, player_entity: int, bullet_cfg: dict):
+    """Creates bullets in four directions (N, S, E, W) as a special ability"""
+    
+    if not ecs_world.entity_exists(player_entity):
+        print("Player entity does not exist")
+        return False
+        
+   
+    try:
+        c_transform = ecs_world.component_for_entity(player_entity, CTransform)
+        c_surface = ecs_world.component_for_entity(player_entity, CSurface)
+        c_special = ecs_world.component_for_entity(player_entity, CSpecialAbility)
+    except KeyError:
+        print("Missing required components for special ability")
+        return False
+    
+    
+    if not c_special.is_ready:
+        print("Special ability on cooldown")
+        return False
+    
+    
+    player_pos = c_transform.pos
+    center_x = player_pos.x + (c_surface.area.width / 2)
+    center_y = player_pos.y + (c_surface.area.height / 2)
+    player_center = pygame.Vector2(center_x, center_y)
+    
+    # Define the four directions (North, East, South, West)
+    directions = [
+        pygame.Vector2(0, -1),  
+        pygame.Vector2(1, 0),   
+        pygame.Vector2(0, 1),   
+        pygame.Vector2(-1, 0)   
+    ]
+    
+    
+    for direction in directions:
+       
+        target_pos = player_center + direction * 1000 
+        
+       
+        create_bullet(
+            ecs_world,
+            target_pos,
+            player_pos,
+            bullet_cfg,
+            c_surface.area.size
+        )
+    
+    
+    c_special.is_ready = False
+    c_special.current_cooldown = c_special.cooldown_time
+    
+    
+    if "special_sound" in bullet_cfg:
+        ServiceLocator.sounds_service.play(bullet_cfg["special_sound"])
+    else:
+        
+        ServiceLocator.sounds_service.play(bullet_cfg["sound"])
+    
+    return True
+
 
 def create_input_player(ecs_world:esper.World):
     input_left = ecs_world.create_entity()
